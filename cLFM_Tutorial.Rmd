@@ -23,12 +23,7 @@ library(mgcv)
 library(pracma)
 library(psych)
 library(tidyverse)
-```
-
-```{r, warning=FALSE}
-source("cLFM_Functions_1.R")
-source("Simulation_dgp.R")
-source("cLFM_Functions_2.R")
+rm(new.packages, list.of.packages)
 ```
 
 
@@ -37,15 +32,16 @@ source("cLFM_Functions_2.R")
 ## Description
 
 A step-by-step implementation of cLFM and associated procedures including data 
-generating process of the first simulation scenario and evaluation of model 
+generating process of the four simulation scenarios and evaluation of model 
 parameter estimation. Details of simulation design, EM estimation of model 
 parameters and trimming-refinement process are described in Section 3 and 
 Section 4 of 'Contrastive Latent Functional Model'.
 
 ## Main functions implemented
 
-1. data_gen: Function that generates a pair of data sets composed of shared and 
+1. data_gen: Function that generates a pair of data sets composed of preset shared and 
 unique variation patterns.
+2. cLFM: Function that constructs and fits the proposed contrastive latent functional model.
 
 ## Required files
 
@@ -56,20 +52,19 @@ unique variation patterns.
 
 # Implementation
 
-## 1. Set-up of simulated functional data pairs
+## 1. Load the required files
 
 ```{r, warning=FALSE}
-n_x = 50 # number of subjects in the first data set X
-n_y = 50 # number of subjects in the second data set Y
-s2_x = 5; s2_y = 5 # level of error variances
+source("Simulation_dgp.R")
+source("cLFM_Functions_1.R")
+source("cLFM_Functions_2.R")
 ```
 
 
 ## 2. cLFM implementation
 
-To save the results from cLFM, we need to create the following containers to save the estimated latent components and score variances. The total running time, estimates of overall mean functions and error variances are also recorded. 
-
 ```{r}
+# Containers to save the estimates of overall mean functions, error variances, latent components and score variances.
 mu_x_save = list()
 mu_y_save = list()
 s2_save = list()
@@ -84,21 +79,19 @@ Theta_save = list()
 Lambda_save = list()
 ```
 
-
 ```{R}
-for (ite in 1) {
+for (ite in 1:5) {
   print(paste0(ite, "-th iteration starts here ------------------------------"))
-  
   # Generate the simulation data pairs
-  set.seed(ite)
-  data_grids = suppressWarnings(data_gen(n_x, n_y, s2_x, s2_y))
+  set.seed(111*ite)
+  data_grids = suppressWarnings(data_gen(n_x = 50, n_y = 50, s2_x = 5, 
+                                         s2_y = 5, case = 1))
   X = data_grids[[1]]
   Y = data_grids[[2]]
   
-  # Proposed cLFM EM estimation and Trimming-Refinement process
-  
-  results = cLFM(X = X, Y = Y, alpha_L = .90, alpha_KR = .90, 
-                 alpha_refine = .90, verbose = TRUE) 
+  # Fitting the proposed cLFM through the EM estimation and Trimming-Refinement process
+  results = cLFM(X = X, Y = Y, alpha_L = .90, alpha_KR = .90,
+                 alpha_refine = .90, verbose = TRUE)
   
   # Save the estimates
   mu_x_save = append(mu_x_save, list(results[[1]]))
@@ -131,7 +124,11 @@ mu_x = matrix(sapply(tobs, function(x){return(4.5 * x + 1.5 * exp(x ^ 2))}),
 mu_y = matrix(sapply(tobs, function(x){return(-10 * x + 5 * 
                                                 exp(-50 * (x - 0.7) ^ 2) + 5)}), 
               nrow = N, ncol = 1)
-Psi_true = eval.basis(tobs, fda::create.fourier.basis(nbasis = 3, 
+# True error variances
+s2_x = 5
+s2_y = 5
+# True latent components and score variances
+Psi_true = eval.basis(tobs, fda::create.fourier.basis(nbasis = 3,
                                                       dropind = c(1,2)))
 Phi_true = eval.basis((tobs), create.fourier.basis(nbasis = 3,
                                                    dropind = c(1,3)))
@@ -143,8 +140,7 @@ Theta = matrix(6)
 Lambda = matrix(8.5)
 ```
 
-
-Overall mean functions $\mu^x(t)$, $\mu^y(t)$:
+MSDE of overall mean functions $\mu^x(t)$, $\mu^y(t)$:
 
 ```{r}
 MSDE_mu = matrix(data = NA, nrow = length(mu_x_save), ncol = 2)
@@ -158,7 +154,7 @@ print(paste0("The mean MSDE for the overall mean functions {",
 print(round(colMeans(MSDE_mu, na.rm = TRUE), digits = 3))
 ```
 
-Error variance $\sigma^2_X$, $\sigma^2_Y$:
+MSE of error variances $\sigma^2_X$, $\sigma^2_Y$:
 
 ```{r}
 MSE_s2 = matrix(data = NA, nrow = length(s2_save), ncol = 2)
@@ -323,16 +319,16 @@ for (j in 1:3) {
     ind_mat[2,j] = which.min(abs(MSDE_Psi[,2] - quantile_mat[2,j]))
   }
 }
-psi_1_5th = sign(Psi_1_est[ind_mat[1,1],1]) * Psi_1_est[ind_mat[1,1],]
-psi_1_50th = sign(Psi_1_est[ind_mat[1,2],1]) * Psi_1_est[ind_mat[1,2],]
-psi_1_95th = sign(Psi_1_est[ind_mat[1,3],1]) * Psi_1_est[ind_mat[1,3],]
+psi_1_5th = sign(Psi_1_est[ind_mat[1,1],4]) * Psi_1_est[ind_mat[1,1],]
+psi_1_50th = sign(Psi_1_est[ind_mat[1,2],4]) * Psi_1_est[ind_mat[1,2],]
+psi_1_95th = sign(Psi_1_est[ind_mat[1,3],4]) * Psi_1_est[ind_mat[1,3],]
 
 
 ## plot for psi_1(t)
 matplot(tobs, cbind(Psi_true[,1], psi_1_5th, psi_1_50th, psi_1_95th), 
         type = "l", lwd = 3, xlab = "Time", ylab = "",  cex.lab = 1.9, 
         cex.axis = 1.5, col=c("black", "red","black", "blue"), lty = c(1,2,3,4), 
-        mgp = c(2.5,1,0))
+        mgp = c(2.5,1,0), xaxs = 'i')
 title(main = list("", cex = 2.5), adj = 0, line = 1.5)
 mtext(expression(hat(psi)[1]*(t)), side=2, line=1.9, cex=1.9)
 legend("bottomright", c("true", "5th", "50th", "95th"), lty = c(1,2,3,4), 
@@ -341,15 +337,15 @@ legend("bottomright", c("true", "5th", "50th", "95th"), lty = c(1,2,3,4),
 
 ## plot for psi_2(t)
 if(L_true > 1){
-  psi_2_5th = sign(Psi_2_est[ind_mat[1,1],1]) * Psi_2_est[ind_mat[1,1],]
-  psi_2_50th = sign(Psi_2_est[ind_mat[1,2],1]) * Psi_2_est[ind_mat[1,2],]
-  psi_2_95th = sign(Psi_2_est[ind_mat[1,3],1]) * Psi_2_est[ind_mat[1,3],]
+  psi_2_5th = sign(Psi_2_est[ind_mat[1,1],4]) * Psi_2_est[ind_mat[1,1],]
+  psi_2_50th = sign(Psi_2_est[ind_mat[1,2],4]) * Psi_2_est[ind_mat[1,2],]
+  psi_2_95th = sign(Psi_2_est[ind_mat[1,3],4]) * Psi_2_est[ind_mat[1,3],]
   matplot(tobs, cbind(Psi_true[,2], psi_2_5th, psi_2_50th, psi_2_95th), 
           type = "l", lwd = 3, xlab = "Time", ylab = "",  cex.lab = 1.9, 
           cex.axis = 1.5, col=c("black", "red","black", "blue"), 
-          lty = c(1,2,3,4), mgp = c(2.5,1,0))
+          lty = c(1,2,3,4), mgp = c(2.5,1,0), xaxs = 'i')
   title(main = list("", cex = 2.5), adj = 0, line = 1.5)
-  mtext(expression(hat(psi)[1]*(t)), side=2, line=1.9, cex=1.9)
+  mtext(expression(hat(psi)[2]*(t)), side=2, line=1.9, cex=1.9)
 }
 ```
 
@@ -493,31 +489,31 @@ for (j in 1:3) {
     ind_mat[2,j] = which.min(abs(MSDE_Phi[,2] - quantile_mat[2,j]))
   }
 }
-phi_1_5th = sign(Phi_1_est[ind_mat[1,1],6]) * Phi_1_est[ind_mat[1,1],]
-phi_1_50th = sign(Phi_1_est[ind_mat[1,2],6]) * Phi_1_est[ind_mat[1,2],]
-phi_1_95th = sign(Phi_1_est[ind_mat[1,3],6]) * Phi_1_est[ind_mat[1,3],]
+phi_1_5th = sign(Phi_1_est[ind_mat[1,1],7]) * Phi_1_est[ind_mat[1,1],]
+phi_1_50th = sign(Phi_1_est[ind_mat[1,2],7]) * Phi_1_est[ind_mat[1,2],]
+phi_1_95th = sign(Phi_1_est[ind_mat[1,3],7]) * Phi_1_est[ind_mat[1,3],]
 
 
 ## plot for phi_1(t)
 matplot(tobs, cbind(Phi_true[,1], phi_1_5th, phi_1_50th, phi_1_95th), 
         type = "l", lwd = 3, xlab = "Time", ylab = "", cex.lab = 1.9, 
         cex.axis = 1.5, col=c("black", "red","black", "blue"), lty = c(1,2,3,4), 
-        mgp = c(2.5,1,0))
+        mgp = c(2.5,1,0), xaxs = 'i')
 title(main = list("", cex = 2.5), adj = 0, line = 1.5)
 mtext(expression(hat(phi)[1]*(t)), side=2, line=1.9, cex=1.9)
 
 
 ## plot for phi_2(t)
 if(K_true > 1){
-  phi_2_5th = sign(Phi_2_est[ind_mat[1,1],6]) * Phi_2_est[ind_mat[1,1],]
-  phi_2_50th = sign(Phi_2_est[ind_mat[1,2],6]) * Phi_2_est[ind_mat[1,2],]
-  phi_2_95th = sign(Phi_2_est[ind_mat[1,3],6]) * Phi_2_est[ind_mat[1,3],]
+  phi_2_5th = sign(Phi_2_est[ind_mat[1,1],1]) * Phi_2_est[ind_mat[1,1],]
+  phi_2_50th = sign(Phi_2_est[ind_mat[1,2],1]) * Phi_2_est[ind_mat[1,2],]
+  phi_2_95th = sign(Phi_2_est[ind_mat[1,3],1]) * Phi_2_est[ind_mat[1,3],]
   matplot(tobs, cbind(Phi_true[,2], phi_2_5th, phi_2_50th, phi_2_95th), 
           type = "l", lwd = 3, xlab = "Time", ylab = "",  cex.lab = 1.9, 
           cex.axis = 1.5, col=c("black", "red","black", "blue"), 
-          lty = c(1,2,3,4), mgp = c(2.5,1,0))
+          lty = c(1,2,3,4), mgp = c(2.5,1,0), xaxs = 'i')
   title(main = list("", cex = 2.5), adj = 0, line = 1.5)
-  mtext(expression(hat(phi)[1]*(t)), side=2, line=1.9, cex=1.9)
+  mtext(expression(hat(phi)[2]*(t)), side=2, line=1.9, cex=1.9)
 }
 ```
 
@@ -660,30 +656,30 @@ for (j in 1:3) {
     ind_mat[2,j] = which.min(abs(MSDE_Gamma[,2] - quantile_mat[2,j]))
   }
 }
-gamma_1_5th = sign(Gamma_1_est[ind_mat[1,1],6]) * Gamma_1_est[ind_mat[1,1],]
-gamma_1_50th = sign(Gamma_1_est[ind_mat[1,2],6]) * Gamma_1_est[ind_mat[1,2],]
-gamma_1_95th = sign(Gamma_1_est[ind_mat[1,3],6]) * Gamma_1_est[ind_mat[1,3],]
+gamma_1_5th = sign(Gamma_1_est[ind_mat[1,1],4]) * Gamma_1_est[ind_mat[1,1],]
+gamma_1_50th = sign(Gamma_1_est[ind_mat[1,2],4]) * Gamma_1_est[ind_mat[1,2],]
+gamma_1_95th = sign(Gamma_1_est[ind_mat[1,3],4]) * Gamma_1_est[ind_mat[1,3],]
 
 ## plot for gamma_1(t)
 matplot(tobs, cbind(Gamma_true[,1], gamma_1_5th, gamma_1_50th, gamma_1_95th), 
         type = "l", lwd = 3, xlab = "Time", ylab = "", cex.lab = 1.9, 
         cex.axis = 1.5, col=c("black", "red","black", "blue"), lty = c(1,2,3,4),
-        mgp = c(2.5,1,0))
+        mgp = c(2.5,1,0), xaxs = 'i')
 title(main = list("", cex = 2.5), adj = 0, line = 1.5)
 mtext(expression(hat(gamma)[1]*(t)), side=2, line=1.9, cex=1.9)
 
 
 ## plot for gamma_2(t)
 if(R_true > 1){
-  gamma_2_5th = sign(Gamma_2_est[ind_mat[1,1],6]) * Gamma_2_est[ind_mat[1,1],]
-  gamma_2_50th = sign(Gamma_2_est[ind_mat[1,2],6]) * Gamma_2_est[ind_mat[1,2],]
-  gamma_2_95th = sign(Gamma_2_est[ind_mat[1,3],6]) * Gamma_2_est[ind_mat[1,3],]
+  gamma_2_5th = sign(Gamma_2_est[ind_mat[1,1],4]) * Gamma_2_est[ind_mat[1,1],]
+  gamma_2_50th = sign(Gamma_2_est[ind_mat[1,2],4]) * Gamma_2_est[ind_mat[1,2],]
+  gamma_2_95th = sign(Gamma_2_est[ind_mat[1,3],4]) * Gamma_2_est[ind_mat[1,3],]
   matplot(tobs, cbind(Gamma_true[,2], gamma_2_5th, gamma_2_50th, gamma_2_95th), 
           type = "l", lwd = 3, xlab = "Time", ylab = "",  cex.lab = 1.9, 
           cex.axis = 1.5, col=c("black", "red","black", "blue"), 
-          lty = c(1,2,3,4), mgp = c(2.5,1,0))
+          lty = c(1,2,3,4), mgp = c(2.5,1,0), xaxs = 'i')
   title(main = list("", cex = 2.5), adj = 0, line = 1.5)
-  mtext(expression(hat(gamma)[1]*(t)), side=2, line=1.9, cex=1.9)
+  mtext(expression(hat(gamma)[2]*(t)), side=2, line=1.9, cex=1.9)
 }
 ```
 

@@ -3,7 +3,7 @@
 ##              described in Algorithm 1 of 'Contrastive Latent Functional Model'.
 ###############################################################################
 ## Functions included:
-## Main functions:
+## Main function:
 ##    run_em: Function for fitting a cLFM model and executing the 
 ##            proposed EM estimation algorithm described in Algorithm 1.
 ## Supporting functions used by the main function:
@@ -14,7 +14,7 @@
 ##    3. adap: Function for adapting the input functional matrix or vector by retaining their 
 ##             information only at the observed time points of the specified data subject with
 ##             subject-specific adaptation matrix A_i^x/A_j^y.
-##    4. smooth_FPCA: Function used in Step 7 for deriving the smoothed estimates of latent components 
+##    4. smooth_est: Function used in Step 7 for deriving the smoothed estimates of latent components 
 ##                    and score variances from the estimated shared/unique covariance spaces.
 ###############################################################################
 
@@ -76,7 +76,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
   
   ## mu^x(t)
   n_x = nrow(X) # number of subjects within the first group
-  data_tab = data.frame(na.omit(cbind(rep(1:n_x, each = N), rep(tobs, n_x), 
+  data_tab = data.frame(na.omit(cbind(rep(1 : n_x, each = N), rep(tobs, n_x), 
                                        as.vector(t(X))))) 
   colnames(data_tab) = c("id", "timePoints", "X")
   est_mean = smooth.spline(data_tab$timePoints, data_tab$X, cv = F, spar = NULL) 
@@ -100,10 +100,10 @@ run_em = function(X, Y, L, K, R, tol, verbose){
   ## sigma^2_X
   empCov = Cov_mat(X1.c, tobs = tobs, smooth_2D = FALSE) # empirical covariance matrix
   smoothCov = Cov_mat(X1.c, tobs = tobs, smooth_2D = TRUE, 
-                      user_smooth_par = NULL) 
+                      user_k = NULL) 
     # 2D smoothed covariance matrix without contamination from errors within the diagonal elements.
     # The default number of basis functions used in smoothing process is 10, and it can be 
-    # specified by users through `user_smooth_par`.
+    # specified by users through `user_k`.
   s2_x = mean(diag(empCov) - diag(smoothCov))
   if(s2_x <= 0){
     stop("The estimated error variance from the first sample is non-positive.")
@@ -113,10 +113,10 @@ run_em = function(X, Y, L, K, R, tol, verbose){
   ## sigma^2_Y
   empCov = Cov_mat(Y1.c, tobs = tobs, smooth_2D = FALSE)
   smoothCov = Cov_mat(Y1.c, tobs = tobs, smooth_2D = TRUE, 
-                      user_smooth_par = NULL)
+                      user_k = NULL)
   s2_y = mean(diag(empCov) - diag(smoothCov))
   if(s2_y <= 0){
-    stop("The estimated error variance from the first sample is non-positive.")
+    stop("The estimated error variance from the second sample is non-positive.")
   }
 
   
@@ -223,42 +223,38 @@ run_em = function(X, Y, L, K, R, tol, verbose){
       if(L > 0){
         E_eta_x = matrix(data = NA, nrow = n_x, ncol = L) 
           # Each row saves the conditional expectation E(eta^x_i|X_i), i = 1,...,n_x. (vector, 1*L)
-        for (i in c(1: n_x)) {
+        for (i in c(1 : n_x)) {
           x = matrix(X1.c[i,], nrow = N, ncol = 1)
-          E_eta_x[i,] = t(adap(x,x)) %*% adap(PsiO_x, x) %*% 
-            t(solve(s2_x * diag(L) + Omega_x %*% t(adap(Psi, x)) %*% 
-                      adap(Psi, x)))
+          E_eta_x[i,] = t(adap(x, x)) %*% adap(PsiO_x, x) %*% 
+            t(solve(s2_x * diag(L) + Omega_x %*% crossprod(adap(Psi, x))))
         }
         
         E_eta_y = matrix(data = NA, nrow = n_y, ncol = L) 
           # Each row saves the conditional expectation E(eta^y_j|Y_j), j = 1,...,n_y. (vector, 1*L)
-        for (i in c(1: n_y)) {
+        for (i in c(1 : n_y)) {
           y = matrix(Y1.c[i,], nrow = N, ncol = 1)
-          E_eta_y[i,] = t(adap(y,y)) %*% adap(PsiO_y, y) %*% 
-            t(solve(s2_y * diag(L) + Omega_y %*% t(adap(Psi, y)) %*% 
-                      adap(Psi, y)))
+          E_eta_y[i,] = t(adap(y, y)) %*% adap(PsiO_y, y) %*% 
+            t(solve(s2_y * diag(L) + Omega_y %*% crossprod(adap(Psi, y))))
         }
       }
       
       if(K > 0){
         E_xi = matrix(data = NA, nrow = n_x, ncol = K) 
           # Each row saves the conditional expectation E(xi_i|X_i), i = 1,...,n_x. (vector, 1*K)
-        for (i in c(1: n_x)) {
+        for (i in c(1 : n_x)) {
           x = matrix(X1.c[i,], nrow = N, ncol = 1)
-          E_xi[i,] = t(adap(x,x)) %*% adap(PhiT, x) %*% 
-            t(solve(s2_x * diag(K) + Theta %*% t(adap(Phi, x)) %*% 
-                      adap(Phi, x)))
+          E_xi[i,] = t(adap(x, x)) %*% adap(PhiT, x) %*% 
+            t(solve(s2_x * diag(K) + Theta %*% crossprod(adap(Phi, x))))
         }
       }
       
       if(R > 0){
         E_zeta = matrix(data = NA, nrow = n_y, ncol = R) 
           # Each row saves the conditional expectation E(zeta_j|Y_j), j = 1,...,n_y. (vector, 1*R)
-        for (i in c(1: n_y)) {
+        for (i in c(1 : n_y)) {
           y = matrix(Y1.c[i,], nrow = N, ncol = 1)
-          E_zeta[i,] = t(adap(y,y)) %*% adap(GammaL, y) %*% 
-            t(solve(s2_y * diag(R) + Lambda %*% t(adap(Gamma, y)) %*% 
-                      adap(Gamma, y)))
+          E_zeta[i,] = t(adap(y, y)) %*% adap(GammaL, y) %*% 
+            t(solve(s2_y * diag(R) + Lambda %*% crossprod(adap(Gamma, y))))
         }
       }
       
@@ -268,12 +264,12 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         E_ee_x = matrix(data = NA, nrow = n_x, ncol = (L^2)) 
           # Each row captures the conditional second moments E(eta^x_i (eta^x_i)^T|X_i) 
           # (matrix, L*L) flattened to a 1*L^2 vector, i = 1,...,n_x.
-        for (i in c(1: n_x)) {
+        for (i in c(1 : n_x)) {
           x = matrix(X1.c[i,], nrow = N, ncol = 1) # column vector of the centralized subject data (X_i-mu^x)
           E_sh = matrix(E_eta_x[i,], nrow = 1) # transpose of the conditional expectation vector E(eta^x_i|X_i)
-          inv_mat = solve(s2_x * diag(L) + Omega_x %*% t(adap(Psi, x)) %*% 
-                            adap(Psi, x))
-          Var_sh = s2_x * inv_mat %*% Omega_x # conditional variance matrix Var(eta^x_i|X_i) 
+          Var_sh = s2_x * 
+            solve(s2_x * diag(L) + Omega_x %*% crossprod(adap(Psi, x))) %*% 
+            Omega_x # conditional variance matrix Var(eta^x_i|X_i) 
           E_ee_x[i,] = t(as.vector(crossprod(E_sh) + Var_sh))
         }
         
@@ -281,12 +277,12 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         E_ee_y = matrix(data = NA, nrow = n_y, ncol = (L^2)) 
           # Each row captures the conditional second moments E(eta^y_j (eta^y_j)^T|Y_j) 
           # (L*L matrix) flattened to a 1*L^2 vector, j = 1,...,n_y.
-        for (j in c(1: n_y)) {
+        for (j in c(1 : n_y)) {
           y = matrix(Y1.c[j,], nrow = N, ncol = 1) # column vector of the centralized subject data (Y_j-mu^y)
           E_sh = matrix(E_eta_y[j,], nrow = 1) # transpose of the conditional expectation vector E(eta^y_j|Y_j) 
-          inv_mat = solve(s2_y * diag(L) + Omega_y %*% t(adap(Psi, y)) %*% 
-                            adap(Psi, y))
-          Var_sh = s2_y * inv_mat %*% Omega_y # conditional variance matrix Var(eta^y_j|Y_j) 
+          Var_sh = s2_y * 
+            solve(s2_y * diag(L) + Omega_y %*% crossprod(adap(Psi, y))) %*% 
+            Omega_y # conditional variance matrix Var(eta^y_j|Y_j) 
           E_ee_y[j,] = t(as.vector(crossprod(E_sh) + Var_sh))
         }
       }
@@ -296,12 +292,12 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         E_xx = matrix(data = NA, nrow = n_x, ncol = (K^2)) 
           # Each row captures the conditional second moments E(xi_i (xi_i)^T|X_i) 
           # (K*K matrix) flattened to a 1*K^2 vector, i = 1,...,n_x.
-        for (i in c(1: n_x)) {
+        for (i in c(1 : n_x)) {
           x = matrix(X1.c[i,], nrow = N, ncol = 1) # column vector of the centralized subject data (X_i-mu^x)
           E_uni = matrix(E_xi[i,], nrow = 1) # transpose of the conditional expectation vector E(xi_i|X_i) 
-          inv_mat = solve(s2_x * diag(K) + Theta %*% t(adap(Phi, x)) %*% 
-                            adap(Phi, x))
-          Var_uni = s2_x * inv_mat %*% Theta # conditional variance matrix Var(xi_i|X_i) 
+          Var_uni = s2_x * 
+            solve(s2_x * diag(K) + Theta %*% crossprod(adap(Phi, x))) %*% 
+            Theta # conditional variance matrix Var(xi_i|X_i) 
           E_xx[i,] = t(as.vector(crossprod(E_uni) + Var_uni))
         }
       }
@@ -311,12 +307,12 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         E_zz = matrix(data = NA, nrow = n_y, ncol = (R^2)) 
           # Each row captures the conditional second moments E(zeta_j (zeta_j)^T|Y_j) 
           # (R*R matrix) flattened to a 1*R^2 vector, j = 1,...,n_y.
-        for (j in c(1: n_y)) {
+        for (j in c(1 : n_y)) {
           y = matrix(Y1.c[j,], nrow = N, ncol = 1) # column vector of the centralized subject data (Y_j-mu^y)
           E_uni = matrix(E_zeta[j,], nrow = 1) # transpose of the conditional expectation vector E(zeta_j|Y_j) 
-          inv_mat = solve(s2_y * diag(R) + Lambda %*% t(adap(Gamma, y)) %*% 
-                            adap(Gamma, y))
-          Var_uni = s2_y * inv_mat %*% Lambda # conditional variance matrix Var(zeta_j|Y_j)
+          Var_uni = s2_y * 
+            solve(s2_y * diag(R) + Lambda %*% crossprod(adap(Gamma, y))) %*% 
+            Lambda # conditional variance matrix Var(zeta_j|Y_j)
           E_zz[j,] = t(as.vector(crossprod(E_uni) + Var_uni))
         }
       }
@@ -373,28 +369,24 @@ run_em = function(X, Y, L, K, R, tol, verbose){
               }
             }
           }
-          
-          # To avoid failures in the following matrix-inverse computations due to over-fitting  
-          # issues, we calculate them by inverting the first several eigenfunctions that  
-          # explain over 95% of their total variations.
-          
-          eigen_res = eigen(part2 + part4) # eigen-decomposition of the input square matrix 
+        
+          eigen_res = eigen(part2 / s2_x + part4 / s2_y) # eigen-decomposition of the input square matrix 
           eigenval = eigen_res$values
           eigenfun = eigen_res$vector
           eigenval = eigenval[which(eigenval > 0)] # retain positive eigenvalues only. 
           if(length(eigenval) > 0){
-            component = match(TRUE, (cumsum(eigenval) / sum(eigenval)) > .95) 
+            component = length(eigenval)
             inv_mat = 0
             for (ind in 1 : component) {
-              inv_mat = inv_mat + (1 / eigenval[ind]) * eigenfun[, ind] %*% 
-                t(eigenfun[, ind])
+              inv_mat = inv_mat + (1 / eigenval[ind]) * 
+                tcrossprod(eigenfun[, ind])
             }
           }else{
-            stop("Error, no positive eigenvalues are available to use when 
-                 updating Psi.")
+            stop("Error, no positive eigenvalues are available for updating 
+                 Psi.")
           }
           
-          Psi_2[t,] = (part1 + part3) %*% inv_mat
+          Psi_2[t,] = (part1 / s2_x + part3 / s2_y) %*% inv_mat
         }
       }else{
         Psi_2 = NULL
@@ -431,14 +423,14 @@ run_em = function(X, Y, L, K, R, tol, verbose){
           eigenval = eigenval[which(eigenval > 0)]
           if(length(eigenval) > 0){
             inv_mat = 0
-            component = match(TRUE, (cumsum(eigenval) / sum(eigenval)) > .95)
+            component = length(eigenval)
             for (ind in 1 : component) {
-              inv_mat = inv_mat + (1 / eigenval[ind]) * eigenfun[, ind] %*% 
-                t(eigenfun[, ind])
+              inv_mat = inv_mat + (1 / eigenval[ind]) * 
+                tcrossprod(eigenfun[, ind])
             }
           }else{
-            stop("Error, no positive eigenvalues are available to use when 
-                 updating Phi.")
+            stop("Error, no positive eigenvalues are available for updating 
+                 Phi.")
           }
           
           Phi_2[t,] = part1 %*% inv_mat
@@ -478,14 +470,14 @@ run_em = function(X, Y, L, K, R, tol, verbose){
           eigenval = eigenval[which(eigenval > 0)]
           if(length(eigenval) > 0){
             inv_mat = 0
-            component = match(TRUE, (cumsum(eigenval) / sum(eigenval)) > .95)
+            component = length(eigenval)
             for (ind in 1 : component) {
-              inv_mat = inv_mat + (1 / eigenval[ind]) * eigenfun[, ind] %*% 
-                t(eigenfun[, ind])
+              inv_mat = inv_mat + (1 / eigenval[ind]) * 
+                tcrossprod(eigenfun[, ind])
             }
           }else{
-            stop("Error, no positive eigenvalues are available to use when 
-                 updating Gamma.")
+            stop("Error, no positive eigenvalues are available for updating
+                  Gamma.")
           }
           
           Gamma_2[t,] = part1 %*% inv_mat
@@ -540,7 +532,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
       
       
       #################################
-      # Step 5. Normalization of the derived raw estimates
+      # Step 5. Gram-Schmidt process to the derived raw estimates
       #################################
       
       if(L > 1){
@@ -552,6 +544,14 @@ run_em = function(X, Y, L, K, R, tol, verbose){
           Omega_x_2[e,e] <- Omega_x_2[e,e] * normal.factor 
           Omega_y_2[e,e] <- Omega_y_2[e,e] * normal.factor
             # adjusts the corresponding score variances to ensure consistency of the original covariance surface.
+        }
+        # Gram-Schmidt process
+        if(!inherits(try(suppressMessages(gramSchmidt(Psi_2)), silent = TRUE), 
+                     "try-error")){
+          gs <- suppressMessages(gramSchmidt(Psi_2))
+          Psi_2 <- gs$Q
+          Omega_x_2 <- diag(x = diag(gs$R %*% Omega_x_2 %*% t(gs$R)), nrow = L)
+          Omega_y_2 <- diag(x = diag(gs$R %*% Omega_y_2 %*% t(gs$R)), nrow = L)
         }
       }else if(L == 1){
         normal.factor <- trapz(tobs, Psi_2^2)
@@ -567,6 +567,13 @@ run_em = function(X, Y, L, K, R, tol, verbose){
           Phi_2[,e] <- (Phi_2[,e] / sqrt(normal.factor))
           Theta_2[e,e] <- Theta_2[e,e] * normal.factor
         }
+        # Gram-Schmidt process
+        if(!inherits(try(suppressMessages(gramSchmidt(Phi_2)), silent = TRUE), 
+                     "try-error")){
+          gs <- suppressMessages(gramSchmidt(Phi_2))
+          Phi_2 <- gs$Q
+          Theta_2 <- diag(x = diag(gs$R %*% Theta_2 %*% t(gs$R)), nrow = K)
+        }
       }else if(K == 1){
         normal.factor <- trapz(tobs, Phi_2^2)
         Phi_2 <- matrix(data = (Phi_2 / sqrt(normal.factor)), ncol = 1)
@@ -580,20 +587,27 @@ run_em = function(X, Y, L, K, R, tol, verbose){
           Gamma_2[,e] <- (Gamma_2[,e] / sqrt(normal.factor))
           Lambda_2[e,e] <- Lambda_2[e,e] * normal.factor
         }
+        # Gram-Schmidt process
+        if(!inherits(try(suppressMessages(gramSchmidt(Gamma_2)), silent = TRUE), 
+                     "try-error")){
+          gs <- suppressMessages(gramSchmidt(Gamma_2))
+          Gamma_2 <- gs$Q
+          Lambda_2 <- diag(x = diag(gs$R %*% Lambda_2 %*% t(gs$R)), nrow = R)
+        }
       }else if(R == 1){
         normal.factor <- trapz(tobs, Gamma_2^2)
         Gamma_2 <- matrix(data = (Gamma_2 / sqrt(normal.factor)), ncol = 1)
         Lambda_2 <- Lambda_2 * normal.factor
       }else{}
       
-      ## Pass the normalized updates to the original ones and continue the EM iteration process.
-      Psi = Psi_2 # Psi
-      Phi = Phi_2 # Phi
-      Gamma = Gamma_2 # Gamma
-      Omega_x = Omega_x_2 # Omega_x
-      Omega_y = Omega_y_2 # Omega_y
-      Theta = Theta_2 # Theta
-      Lambda = Lambda_2 # Lambda
+      ## Pass the orthogonalized updates to the original ones and continue the EM iteration process.
+      Psi <- Psi_2 # Psi
+      Phi <- Phi_2 # Phi
+      Gamma <- Gamma_2 # Gamma
+      Omega_x <- Omega_x_2 # Omega_x
+      Omega_y <- Omega_y_2 # Omega_y
+      Theta <- Theta_2 # Theta
+      Lambda <- Lambda_2 # Lambda
       
       
       #################################
@@ -626,22 +640,21 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         if(L > 0 & K > 0){
           E_sh = matrix((t(adap(x,x)) %*% adap(PsiO_x, x) %*% 
                            t(solve(s2_x * diag(L) + Omega_x %*% 
-                                     t(adap(Psi, x)) %*% adap(Psi, x)))), 
-                        nrow = 1)
-          inv_mat = solve(s2_x * diag(L) + Omega_x %*% t(adap(Psi, x)) %*% 
-                            adap(Psi, x))
-          Var_sh = s2_x * inv_mat %*% Omega_x
+                                     crossprod(adap(Psi, x))))), nrow = 1)
+          Var_sh = s2_x * 
+            solve(s2_x * diag(L) + Omega_x %*% crossprod(adap(Psi, x))) %*% 
+            Omega_x
           
           E_uni = matrix((t(adap(x,x)) %*% adap(PhiT, x) %*% 
                             t(solve(s2_x * diag(K) + Theta %*% 
-                                      t(adap(Phi, x)) %*% adap(Phi, x)))), 
-                         nrow = 1)
-          inv_mat = solve(s2_x * diag(K) + Theta %*% t(adap(Phi, x)) %*% 
-                            adap(Phi, x))
-          Var_uni = s2_x * inv_mat %*% Theta
+                                      crossprod(adap(Phi, x))))), nrow = 1)
+          Var_uni = s2_x * 
+            solve(s2_x * diag(K) + Theta %*% crossprod(adap(Phi, x))) %*% 
+            Theta
           
           
-          part1 = part1 - (non_ms / 2) * log(2 * pi * s2_x) - 
+          part1 = part1 - (non_ms + L + K) / 2 * log(2 * pi) - 
+            (non_ms / 2) * log(s2_x) - 
             (crossprod(adap(x, x)) + (tcrossprod(E_sh %*% t(adap(Psi, x))) + 
                                         tr(adap(Psi, x) %*% Var_sh %*% 
                                              t(adap(Psi, x)))) + 
@@ -658,13 +671,13 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         }else if(L > 0 & K == 0){
           E_sh = matrix((t(adap(x,x)) %*% adap(PsiO_x, x) %*% 
                            t(solve(s2_x * diag(L) + Omega_x %*% 
-                                     t(adap(Psi, x)) %*% adap(Psi, x)))), 
-                        nrow = 1)
-          inv_mat = solve(s2_x * diag(L) + Omega_x %*% t(adap(Psi, x)) %*% 
-                            adap(Psi, x))
-          Var_sh = s2_x * inv_mat %*% Omega_x
+                                     crossprod(adap(Psi, x))))), nrow = 1)
+          Var_sh = s2_x * 
+            solve(s2_x * diag(L) + Omega_x %*% crossprod(adap(Psi, x))) %*% 
+            Omega_x
           
-          part1 = part1 - (non_ms / 2) * log(2 * pi * s2_x) - 
+          part1 = part1 - (non_ms + L) / 2 * log(2 * pi) - 
+            (non_ms / 2) * log(s2_x) - 
             (crossprod(adap(x, x)) + (tcrossprod(E_sh %*% t(adap(Psi, x))) + 
                                         tr(adap(Psi, x) %*% Var_sh %*% 
                                              t(adap(Psi, x)))) - 
@@ -675,13 +688,12 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         }else if(L == 0 & K > 0){
           E_uni = matrix((t(adap(x,x)) %*% adap(PhiT, x) %*% 
                             t(solve(s2_x * diag(K) + Theta %*% 
-                                      t(adap(Phi, x)) %*% adap(Phi, x)))), 
-                         nrow = 1)
-          inv_mat = solve(s2_x * diag(K) + Theta %*% t(adap(Phi, x)) %*% 
-                            adap(Phi, x))
-          Var_uni = s2_x * inv_mat %*% Theta
+                                      crossprod(adap(Phi, x))))), nrow = 1)
+          Var_uni = s2_x * 
+            solve(s2_x * diag(K) + Theta %*% crossprod(adap(Phi, x))) %*% Theta
           
-          part1 = part1 - (non_ms / 2) * log(2 * pi * s2_x) - 
+          part1 = part1 - (non_ms + K) / 2 * log(2 * pi) - 
+            (non_ms / 2) * log(s2_x) - 
             (crossprod(adap(x, x)) + (tcrossprod(E_uni %*% t(adap(Phi, x))) + 
                                         tr(adap(Phi, x) %*% Var_uni %*% 
                                              t(adap(Phi, x)))) - 
@@ -701,21 +713,20 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         if(L > 0 & R > 0){
           E_sh = matrix((t(adap(y,y)) %*% adap(PsiO_y, y) %*% 
                            t(solve(s2_y * diag(L) + Omega_y %*% 
-                                     t(adap(Psi, y)) %*% adap(Psi, y)))), 
-                        nrow = 1) 
-          inv_mat = solve(s2_y * diag(L) + Omega_y %*% t(adap(Psi, y)) %*% 
-                            adap(Psi, y))
-          Var_sh = s2_y * inv_mat %*% Omega_y
+                                     crossprod(adap(Psi, y))))), nrow = 1) 
+          Var_sh = s2_y * 
+            solve(s2_y * diag(L) + Omega_y %*% crossprod(adap(Psi, y))) %*% 
+            Omega_y
           
           E_uni = matrix((t(adap(y,y)) %*% adap(GammaL, y) %*% 
                             t(solve(s2_y * diag(R) + Lambda %*% 
-                                      t(adap(Gamma, y)) %*% adap(Gamma, y)))), 
-                         nrow = 1) 
-          inv_mat = solve(s2_y * diag(R) + Lambda %*% t(adap(Gamma, y)) %*% 
-                            adap(Gamma, y))
-          Var_uni = s2_y * inv_mat %*% Lambda
+                                      crossprod(adap(Gamma, y))))), nrow = 1) 
+          Var_uni = s2_y * 
+            solve(s2_y * diag(R) + Lambda %*% crossprod(adap(Gamma, y))) %*% 
+            Lambda
           
-          part2 = part2 - (non_ms / 2) * log(2 * pi * s2_y) - 
+          part2 = part2 - (non_ms + L + R) / 2 * log(2 * pi) - 
+            (non_ms / 2) * log(s2_y) - 
             (crossprod(adap(y, y)) + (tcrossprod(E_sh %*% t(adap(Psi, y))) + 
                                         tr(adap(Psi, y) %*% Var_sh %*% 
                                              t(adap(Psi, y)))) + 
@@ -732,13 +743,13 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         }else if(L > 0 & R == 0){
           E_sh = matrix((t(adap(y,y)) %*% adap(PsiO_y, y) %*% 
                            t(solve(s2_y * diag(L) + Omega_y %*% 
-                                     t(adap(Psi, y)) %*% adap(Psi, y)))), 
-                        nrow = 1) 
-          inv_mat = solve(s2_y * diag(L) + Omega_y %*% t(adap(Psi, y)) %*% 
-                            adap(Psi, y))
-          Var_sh = s2_y * inv_mat %*% Omega_y
+                                     crossprod(adap(Psi, y))))), nrow = 1) 
+          Var_sh = s2_y * 
+            solve(s2_y * diag(L) + Omega_y %*% crossprod(adap(Psi, y))) %*% 
+            Omega_y
           
-          part2 = part2 - (non_ms / 2) * log(2 * pi * s2_y) - 
+          part2 = part2 - (non_ms + R) / 2 * log(2 * pi) - 
+            (non_ms / 2) * log(s2_y) - 
             (crossprod(adap(y, y)) + (tcrossprod(E_sh %*% t(adap(Psi, y))) + 
                                         tr(adap(Psi, y) %*% Var_sh %*% 
                                              t(adap(Psi, y)))) - 
@@ -749,13 +760,13 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         }else if (L == 0 & R > 0){
           E_uni = matrix((t(adap(y,y)) %*% adap(GammaL, y) %*% 
                             t(solve(s2_y * diag(R) + Lambda %*% 
-                                      t(adap(Gamma, y)) %*% adap(Gamma, y)))), 
-                         nrow = 1) 
-          inv_mat = solve(s2_y * diag(R) + Lambda %*% t(adap(Gamma, y)) %*% 
-                            adap(Gamma, y))
-          Var_uni = s2_y * inv_mat %*% Lambda
+                                      crossprod(adap(Gamma, y))))), nrow = 1) 
+          Var_uni = s2_y * 
+            solve(s2_y * diag(R) + Lambda %*% crossprod(adap(Gamma, y))) %*% 
+            Lambda
           
-          part2 = part2 - (non_ms / 2) * log(2 * pi * s2_y) - 
+          part2 = part2 - (non_ms + L + R) / 2 * log(2 * pi) - 
+            (non_ms / 2) * log(s2_y) - 
             (crossprod(adap(y, y)) + (tcrossprod(E_uni %*% t(adap(Gamma, y))) + 
                                         tr(adap(Gamma, y) %*% Var_uni %*% 
                                              t(adap(Gamma, y)))) - 
@@ -774,7 +785,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
       
       
       
-      if(is.nan(llh) | ite == 200 | stop_flag == 50){ # detection of convergence failure
+      if(is.nan(llh) | ite == 200 | stop_flag == 20){ # detection of convergence failure
         # Detection in X
         ## If any shared/unique component estimates in X explain less than 1%, then L/K will be reduced.
         if(L > 0 & K > 0){
@@ -858,9 +869,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         }
       }
       
-      if(verbose){
-        print(paste0(ite, "th round is finished."))
-      }
+      if(verbose){print(paste0(ite, "th round is finished."))}
     }
     
     
@@ -878,16 +887,27 @@ run_em = function(X, Y, L, K, R, tol, verbose){
     
     if(L_x_of & L_y_of){ 
       L = L - 1
-    }else if(L_x_of & !L_y_of){ 
-      L = L - 1
-      R = R + 1
+    }else if(L_x_of & !L_y_of){
+      if(!R_of){ # R is not large enough
+        L = L - 1
+        R = R + 1
+      }else{
+        L = L - 1
+      }
     }else if(!L_x_of & L_y_of){ 
-      L = L - 1
-      K = K + 1
-    }else if(K_of){
+      if(!K_of){
+        L = L - 1
+        K = K + 1
+      }else{
+        L = L - 1
+      }
+    }else if(K_of & R_of){
       K = K - 1
-    }else if(R_of){
       R = R - 1
+    }else if(!K_of & R_of){
+      R = R - 1
+    }else if(K_of & !R_of){
+      K = K - 1
     }else{}
     
     
@@ -913,9 +933,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
     conv_flag = TRUE 
     
     if(K > 0){
-      smooth_est = smooth_FPCA(Phi, Theta, K, tobs = tobs) # G_phi
-        # The default dimension of basis functions used in this smoothing process is 10 
-        # and it can be specified by `user_smooth_par`.
+      smooth_est = smooth_est(Phi, Theta, K, tobs = tobs) # G_phi
       Phi = smooth_est[[1]]
       Theta = smooth_est[[2]]
       if(conv_flag & !is.null(G_Phi)){
@@ -932,7 +950,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
     }
     
     if(R > 0){
-      smooth_est = smooth_FPCA(Gamma, Lambda, R, tobs = tobs) # G_gamma
+      smooth_est = smooth_est(Gamma, Lambda, R, tobs = tobs, user_k = 6) # G_gamma
       Gamma = smooth_est[[1]]
       Lambda = smooth_est[[2]]
       if(conv_flag & !is.null(G_Gamma)){
@@ -949,7 +967,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
     }
     
     if(L > 0){
-      smooth_est = smooth_FPCA(Psi, Omega_x, L, tobs = tobs) # G^x_psi
+      smooth_est = smooth_est(Psi, Omega_x, L, tobs = tobs) # G^x_psi
       Psi_sm = smooth_est[[1]] # smoothed estimate of Psi
       Omega_x = smooth_est[[2]] # smoothed estimate of Omega^x
       
@@ -962,7 +980,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
       }
       G_Psi_x = smooth_est[[3]]
       
-      smooth_est = smooth_FPCA(Psi, Omega_y, L, tobs = tobs) # G^y_psi
+      smooth_est = smooth_est(Psi, Omega_y, L, tobs = tobs) # G^y_psi
       if(conv_flag & !is.null(G_Psi_y)){
         conv_flag = sum((G_Psi_y - smooth_est[[3]])^2) / sum((G_Psi_y)^2) < .10
         if(verbose){print(paste("G_Psi_y", round(
@@ -1022,7 +1040,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
 
 
 FPCA_vf = function(data_grid, spar = NULL, elbow_plot = FALSE, vf_th = .90, 
-                   user_smooth_par = NULL){
+                   user_k = NULL, verbose = TRUE){
   
   #############################################################################
   ## Description: (supporting function) This function applies FPCA to the input data and
@@ -1033,8 +1051,9 @@ FPCA_vf = function(data_grid, spar = NULL, elbow_plot = FALSE, vf_th = .90,
   ##              elbow_plot: indicator whether to display elbow plots of variation proportions 
   ##                          within FPCA result. (logical)
   ##              vf_th: a threshold to determine the number of eigenfunctions retained in FPCA. (scalar)
-  ##              user_smooth_par: the dimension of bases used in smoothing covariance surfaces 
+  ##              user_k: the dimension of bases used in smoothing covariance surfaces 
   ##                               if specified by users. (integer)
+  ##              verbose: indicator whether to display the diagnostic messages. (logical)
   ## Returns:     a list containing:
   ##                mu_e: estimate of the overall mean function (vector, N*1)
   ##                eigenval: an array saves retained eigenvalues. (array)
@@ -1051,14 +1070,16 @@ FPCA_vf = function(data_grid, spar = NULL, elbow_plot = FALSE, vf_th = .90,
   # Calculate the mean
   est_ss <- smooth.spline(data_tab$timePoints, data_tab$data_grid, cv = F, 
                           spar = spar)
-  print(c("The smoothing parameter of the estimated mean function is ", 
-          round(est_ss$spar, digits = 2)))
+  if(verbose){
+    print(c("The smoothing parameter of the estimated mean function is ", 
+            round(est_ss$spar, digits = 2)))
+  }
   
   mu_e = matrix(data = est_ss$y, nrow = length(tobs), ncol = 1)
   data.c <- sweep(data_grid, 2, mu_e)
-  if(!is.null(user_smooth_par)){
+  if(!is.null(user_k)){
     cov_smooth <- Cov_mat(data.c, tobs = tobs, smooth_2D = TRUE, 
-                          user_smooth_par = user_smooth_par)
+                          user_k = user_k)
   }else{
     cov_smooth <- Cov_mat(data.c, tobs = tobs, smooth_2D = TRUE)
   }
@@ -1113,18 +1134,20 @@ FPCA_vf = function(data_grid, spar = NULL, elbow_plot = FALSE, vf_th = .90,
     eigenfun = eigenfun[,1:n_components]
   }
   
-  print("------------")
-  print(c(paste("The variation fraction explained by the eigenfunctions", 
-                "retained from FPCA is"), 
-          paste0(round(vf_prop[1:n_components], digits = 2), "%")))
-  print(c("------------"))
+  if(verbose){
+    print("------------")
+    print(c(paste("The variation fraction explained by the eigenfunctions", 
+                  "retained from FPCA is"), 
+            paste0(round(vf_prop[1:n_components], digits = 2), "%")))
+    print(c("------------"))
+  }
   
   return(list(mu_e, eigenval, eigenfun))
 }
 
 
 
-Cov_mat = function(data.c, tobs, smooth_2D, user_smooth_par = NULL){
+Cov_mat = function(data.c, tobs, smooth_2D, user_k = NULL){
   
   #############################################################################
   ## Description: (supporting function) This function calculates the empirical or 2D smoothed covariance 
@@ -1133,7 +1156,7 @@ Cov_mat = function(data.c, tobs, smooth_2D, user_smooth_par = NULL){
   ##              tobs: total time grid T (vector, N*1).
   ##              smooth_2D: indicator whether to conduct 2D smoothing process (TRUE: apply 
   ##                         2D smoothing; FALSE: do not apply)
-  ##              user_smooth_par: the dimension of bases used in smoothing process specified by users. (integer)
+  ##              user_k: the dimension(s) of bases used in smoothing process specified by users. (integer)
   ## Returns:     An empirical or 2D smoothed covariance surface matrix (matrix, N*N).
   #############################################################################
   
@@ -1164,11 +1187,11 @@ Cov_mat = function(data.c, tobs, smooth_2D, user_smooth_par = NULL){
     
     # Smooth the covariance surface by 2D penalized smoothing splines, with smoothing 
     # parameters chosen by REML and default dimension of basis function is k = 10.
-    if(is.null(user_smooth_par)){
+    if(is.null(user_k)){
       smooth_cov <- gam(as.vector(empCov) ~ te(x0, x1, k = 10, bs = "bs"), 
                         method = "REML")
     }else{
-      smooth_cov <- gam(as.vector(empCov) ~ te(x0, x1, k = user_smooth_par, 
+      smooth_cov <- gam(as.vector(empCov) ~ te(x0, x1, k = user_k, 
                                                bs = "bs"), method = "REML")
     }
     
@@ -1210,8 +1233,8 @@ adap = function(mat, data){
 
 
 
-smooth_FPCA = function(latent_mat, scoreVar, component, tobs, 
-                       user_smooth_par = NULL){
+smooth_est = function(latent_mat, scoreVar, component, tobs, 
+                       user_k = NULL){
   
   #############################################################################
   ## Description: (supporting function) This function derives the smoothed estimates of latent components 
@@ -1220,7 +1243,7 @@ smooth_FPCA = function(latent_mat, scoreVar, component, tobs,
   ##              scoreVar: a non-smoothed score variance matrix (matrix, L*L/K*K/R*R)
   ##              component: number of shared/unique latent components (integer)
   ##              tobs: total time grid T (vector, N*1).
-  ##              user_smooth_par: the specified dimension of bases used in smoothing process. (integer)
+  ##              user_k: the dimension(s) of bases used in smoothing process. (integer)
   ## Returns:     a list containing:
   ##                latent_mat_sm: smoothed estimate of the input latent component matrix. (matrix, same 
   ##                               dimension as `latent_mat`)
@@ -1241,12 +1264,12 @@ smooth_FPCA = function(latent_mat, scoreVar, component, tobs,
   x1 <- rep(tobs, N)
   
   ## 2D smoothing of the input covariance surface
-  if(is.null(user_smooth_par)){
-    smooth_cov <- gam(as.vector(Ghat) ~ te(x0, x1, bs = "bs", k = 10, 
+  if(is.null(user_k)){
+    smooth_cov <- gam(as.vector(Ghat) ~ te(x0, x1, bs = "bs", k = 5, 
                                            sp = c(-1, -1)), method = "REML")
   }else{
     smooth_cov <- gam(as.vector(Ghat) ~ te(x0, x1, bs = "bs", 
-                                           k = user_smooth_par, sp = c(-1, -1)), 
+                                           k = user_k, sp = c(-1, -1)), 
                       method = "REML")
   }
   
