@@ -600,7 +600,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
         Lambda_2 <- Lambda_2 * normal.factor
       }else{}
       
-      ## Pass the orthogonalized updates to the original ones and continue the EM iteration process.
+      ## Pass the orthonormalized updates to the original ones and continue the EM iteration process.
       Psi <- Psi_2 # Psi
       Phi <- Phi_2 # Phi
       Gamma <- Gamma_2 # Gamma
@@ -933,7 +933,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
     conv_flag = TRUE 
     
     if(K > 0){
-      smooth_est = smooth_est(Phi, Theta, K, tobs = tobs) # G_phi
+      smooth_est = smooth_est(Phi, Theta, K, tobs = tobs, user_k = 5) # G_phi
       Phi = smooth_est[[1]]
       Theta = smooth_est[[2]]
       if(conv_flag & !is.null(G_Phi)){
@@ -967,7 +967,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
     }
     
     if(L > 0){
-      smooth_est = smooth_est(Psi, Omega_x, L, tobs = tobs) # G^x_psi
+      smooth_est = smooth_est(Psi, Omega_x, L, tobs = tobs, user_k = 5) # G^x_psi
       Psi_sm = smooth_est[[1]] # smoothed estimate of Psi
       Omega_x = smooth_est[[2]] # smoothed estimate of Omega^x
       
@@ -980,7 +980,7 @@ run_em = function(X, Y, L, K, R, tol, verbose){
       }
       G_Psi_x = smooth_est[[3]]
       
-      smooth_est = smooth_est(Psi, Omega_y, L, tobs = tobs) # G^y_psi
+      smooth_est = smooth_est(Psi, Omega_y, L, tobs = tobs, user_k = 5) # G^y_psi
       if(conv_flag & !is.null(G_Psi_y)){
         conv_flag = sum((G_Psi_y - smooth_est[[3]])^2) / sum((G_Psi_y)^2) < .10
         if(verbose){print(paste("G_Psi_y", round(
@@ -1070,10 +1070,6 @@ FPCA_vf = function(data_grid, spar = NULL, elbow_plot = FALSE, vf_th = .90,
   # Calculate the mean
   est_ss <- smooth.spline(data_tab$timePoints, data_tab$data_grid, cv = F, 
                           spar = spar)
-  if(verbose){
-    print(c("The smoothing parameter of the estimated mean function is ", 
-            round(est_ss$spar, digits = 2)))
-  }
   
   mu_e = matrix(data = est_ss$y, nrow = length(tobs), ncol = 1)
   data.c <- sweep(data_grid, 2, mu_e)
@@ -1186,10 +1182,10 @@ Cov_mat = function(data.c, tobs, smooth_2D, user_k = NULL){
     }
     
     # Smooth the covariance surface by 2D penalized smoothing splines, with smoothing 
-    # parameters chosen by REML and default dimension of basis function is k = 10.
+    # parameters chosen by REML.
     if(is.null(user_k)){
-      smooth_cov <- gam(as.vector(empCov) ~ te(x0, x1, k = 10, bs = "bs"), 
-                        method = "REML")
+      smooth_cov <- gam(as.vector(empCov) ~ te(x0, x1, k = 8, bs = "bs"), 
+                        method = "REML") # Default dimension of basis function is k = 8. Adjust this k to avoid over-/under-fitting issues.
     }else{
       smooth_cov <- gam(as.vector(empCov) ~ te(x0, x1, k = user_k, 
                                                bs = "bs"), method = "REML")
@@ -1270,7 +1266,7 @@ smooth_est = function(latent_mat, scoreVar, component, tobs,
   }else{
     smooth_cov <- gam(as.vector(Ghat) ~ te(x0, x1, bs = "bs", 
                                            k = user_k, sp = c(-1, -1)), 
-                      method = "REML")
+                      method = "REML") # Adjust this k to avoid over-/under-fitting issues.
   }
   
   grids2d <- data.frame(x0 = x0, x1 = x1)

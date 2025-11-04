@@ -6,8 +6,8 @@
 cLFM = function(X, Y, alpha_L, alpha_KR, alpha_refine, verbose = TRUE){
   
   #############################################################################
-  ## Description: This function constructs the contrastive latent functional model by running EM estimation algorithm
-  ##              and applying trimming process to the three quantities (L, K, R) based on shared and
+  ## Description: This function constructs the contrastive latent functional model by running the EM estimation (Algorithm 1)
+  ##              and applying trimming-refinement process (Algorithm 2) to the three quantities (L, K, R) based on shared and
   ##              unique variation proportions. 
   ## Args:        X: data grid of the first group of data (matrix, n_x*N)
   ##              Y: data grid of the second group of data (matrix, n_y*N)
@@ -267,13 +267,13 @@ cLFM = function(X, Y, alpha_L, alpha_KR, alpha_refine, verbose = TRUE){
         for (r in 1:R1) {
           MSDD_unique = min(trapz(tobs, (Phi[,k] - Gamma[,r])^2), 
                             trapz(tobs, (Phi[,k] + Gamma[,r])^2))
-          if(MSDD_unique < 0.1){
+          if(MSDD_unique < .15){
             L1 = L1 + 1
             K1 = K1 - 1
             R1 = R1 - 1
             if(verbose){
               print(paste0("MSDD(phi", k, "(t), gamma", r, "(t)) is ", 
-                           round(MSDD_unique, digits = 2), ", lower than 10%."))
+                           round(MSDD_unique, digits = 2), ", lower than 15%."))
             }
             refit = TRUE
             break

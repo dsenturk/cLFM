@@ -32,7 +32,7 @@ rm(new.packages, list.of.packages)
 ## Description
 
 A step-by-step implementation of cLFM and associated procedures including data 
-generating process of the four simulation scenarios and evaluation of model 
+generating process of the first simulation scenarios and evaluation of model 
 parameter estimation. Details of simulation design, EM estimation of model 
 parameters and trimming-refinement process are described in Section 3 and 
 Section 4 of 'Contrastive Latent Functional Model'.
@@ -80,18 +80,16 @@ Lambda_save = list()
 ```
 
 ```{R}
-for (ite in 1:5) {
+for (ite in 1:10) {
   print(paste0(ite, "-th iteration starts here ------------------------------"))
   # Generate the simulation data pairs
-  set.seed(111*ite)
-  data_grids = suppressWarnings(data_gen(n_x = 50, n_y = 50, s2_x = 5, 
-                                         s2_y = 5, case = 1))
+  data_grids = data_gen(n_x = 50, n_y = 50, s2_x = 5, s2_y = 5)
   X = data_grids[[1]]
   Y = data_grids[[2]]
   
   # Fitting the proposed cLFM through the EM estimation and Trimming-Refinement process
-  results = cLFM(X = X, Y = Y, alpha_L = .90, alpha_KR = .90,
-                 alpha_refine = .90, verbose = TRUE)
+  results = cLFM(X = X, Y = Y, alpha_L = .85, alpha_KR = .85,
+                 alpha_refine = .85, verbose = TRUE)
   
   # Save the estimates
   mu_x_save = append(mu_x_save, list(results[[1]]))

@@ -4,7 +4,7 @@
 ##              the simulation section in 'Contrastive Latent Functional Model'.
 ###############################################################################
 
-data_gen = function(n_x, n_y, s2_x, s2_y, case = 1){
+data_gen = function(n_x, n_y, s2_x, s2_y){
   
   #############################################################################
   ## Description: This function generates the data sets described in the first 
@@ -13,71 +13,32 @@ data_gen = function(n_x, n_y, s2_x, s2_y, case = 1){
   ##              n_y: number of subjects within the second data set (integer).
   ##              s2_x: error variance for the first data set, sigma^2_X. (scalar)
   ##              s2_y: error variance for the second data set, sigma^2_Y. (scalar)
-  ##              case: index of simulation scenarios. (integer)
   ## Returns:     A list containing generated data pairs (X, Y) (matrix, n_x*30, n_y*30).
   #############################################################################
   
   N = 30 # total number of time points
   tobs = seq(0, 1, length.out = N) # vector of total time points
+  set.seed(111)
   
   # Construct the shared/unique latent component matrices
-  if(case <= 2){
-    psi = suppressWarnings(create.fourier.basis(nbasis = 3, dropind = c(1,2))) # psi_1(t) = sqrt(2)*cos(2pi*t)
-    Psi = eval.basis(tobs, psi)
-    
-    phi = suppressWarnings(create.fourier.basis(nbasis = 3, dropind = c(1,3))) # phi_1(t) = sqrt(2)*sin(2pi*t)
-    Phi = eval.basis(tobs, phi)
-    
-    gamma = suppressWarnings(create.fourier.basis(nbasis = 5, 
-                                                  dropind = c(1,2,3,5))) # gamma_1(t) = sqrt(2)*sin(4pi*t)
-    Gamma = eval.basis(tobs, gamma)
-  }else if(case == 3){
-    psi = suppressWarnings(create.fourier.basis(nbasis = 3, dropind = c(1))) # psi_1(t) = sqrt(2)*cos(2pi*t), psi_2(t) = sqrt(2)*sin(2pi*t)
-    Psi = eval.basis(tobs, psi)
-  }else if(case == 4){
-    phi = suppressWarnings(create.fourier.basis(nbasis = 5, dropind = c(1,3,4))) # phi_1(t) = sqrt(2)*sin(2pi*t), phi_2(t) = sqrt(2)*cos(4pi*t)
-    Phi = eval.basis(tobs, phi)
-    
-    gamma = suppressWarnings(create.fourier.basis(nbasis = 5, 
-                                                  dropind = c(1,2,5))) # gamma_1(t) = sqrt(2)*cos(2pi*t), gamma_2(t) = sqrt(2)*sin(4pi*t)
-    Gamma = eval.basis(tobs, gamma)
-  }else{
-    stop("Wrong scenario index.")
-  }
+  psi = suppressWarnings(create.fourier.basis(nbasis = 3, dropind = c(1,2))) # psi_1(t) = sqrt(2)*cos(2pi*t)
+  Psi = eval.basis(tobs, psi)
   
+  phi = suppressWarnings(create.fourier.basis(nbasis = 3, dropind = c(1,3))) # phi_1(t) = sqrt(2)*sin(2pi*t)
+  Phi = eval.basis(tobs, phi)
+  
+  gamma = suppressWarnings(create.fourier.basis(nbasis = 5, 
+                                                dropind = c(1,2,3,5))) # gamma_1(t) = sqrt(2)*sin(4pi*t)
+  Gamma = eval.basis(tobs, gamma)
   
   # Construct the score variance matrices
-  if(case == 1){
-    Omega_x = matrix(14)
-    Omega_y = matrix(11.5)
-    Theta = matrix(6)
-    Lambda = matrix(8.5)
-    L = 1 # dimension of the shared space
-    K = 1 # dimension of the unique space of the first group of data X
-    R = 1 # dimension of the unique space of the second group of data Y
-  }else if(case == 2){
-    Omega_x = matrix(9)
-    Omega_y = matrix(9)
-    Theta = matrix(14)
-    Lambda = matrix(14)
-    L = 1 
-    K = 1 
-    R = 1
-  }else if(case == 3){
-    Omega_x = diag(c(14, 6))
-    Omega_y = diag(c(8, 12))
-    L = 2 
-    K = 0 
-    R = 0
-  }else if(case == 4){
-    Theta = diag(c(14, 6))
-    Lambda = diag(c(12, 8))
-    L = 0
-    K = 2 
-    R = 2
-  }else{
-    stop("Wrong case index.")
-  }
+  Omega_x = matrix(14)
+  Omega_y = matrix(11.5)
+  Theta = matrix(6)
+  Lambda = matrix(8.5)
+  L = 1 # dimension of the shared space
+  K = 1 # dimension of the unique space of the first group of data X
+  R = 1 # dimension of the unique space of the second group of data Y
   
   
   # Generate X
